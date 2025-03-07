@@ -13,6 +13,7 @@ class ControlCore {
   
   private:
     rclcpp::Logger logger_;
+    
 };
 
 } 
