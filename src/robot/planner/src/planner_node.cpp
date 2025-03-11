@@ -72,7 +72,7 @@ void PlannerNode::planPath() {
   std::vector<CellIndex> grid_path;
   nav_msgs::msg::Path path;
   path.header.stamp = this->get_clock()->now();
-  path.header.frame_id = "map";
+  path.header.frame_id = "sim_world";
 
   std::priority_queue<AStarNode, std::vector<AStarNode>, CompareF>  open;
   std::unordered_map<CellIndex, bool, CellIndexHash> closed;
@@ -138,7 +138,7 @@ void PlannerNode::planPath() {
     pose.position.x = (grid_path[i].x - dim / 2)*res;
     pose.position.y = (grid_path[i].y - dim / 2)*res;
     pose_stamped.header.stamp = rclcpp::Clock().now();
-    pose_stamped.header.frame_id = "map";
+    pose_stamped.header.frame_id = "sim_world";
     pose_stamped.pose = pose; 
     path.poses.push_back(pose_stamped);
   }
