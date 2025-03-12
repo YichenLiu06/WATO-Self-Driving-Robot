@@ -50,7 +50,7 @@ void PlannerNode::timerCallback() {
 bool PlannerNode::goalReached() {
   double dx = goal_.point.x - robot_pose_.position.x;
   double dy = goal_.point.y - robot_pose_.position.y;
-  return std::sqrt(dx * dx + dy * dy) < 0.5; // Threshold for reaching the goal
+  return std::sqrt(pow(dx,2) + pow(dy,2)) < 0.5; // Threshold for reaching the goal
 }
 
 bool PlannerNode::traversible(CellIndex idx){

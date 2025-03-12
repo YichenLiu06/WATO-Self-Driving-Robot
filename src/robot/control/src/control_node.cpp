@@ -8,7 +8,7 @@
 ControlNode::ControlNode(): Node("control"), control_(robot::ControlCore(this->get_logger())) {
   lookahead_distance_ = 1.0;  // Lookahead distance
   goal_tolerance_ = 0.5;     // Distance to consider the goal reached
-  linear_speed_ = 0.5;       // Constant forward speed
+  linear_speed_ = 1;       // Constant forward speed
   path_index_ = 0;
   lookahead_error_ = 0.01;
 
@@ -28,20 +28,38 @@ ControlNode::ControlNode(): Node("control"), control_(robot::ControlCore(this->g
 
 void ControlNode::controlLoop(){
   // Skip control if no path or odometry data is available
-  if (!current_path_ || !robot_odom_) {
-      return;
+  if (!current_path_ || !robot_odom_) return;
+
+ 
+
+  geometry_msgs::msg::Point goal_point = current_path_->poses.back().pose.position;
+  geometry_msgs::msg::Point robot_point =  robot_odom_->pose.pose.position;
+  double dx = goal_point.x - robot_point.x;
+  double dy = goal_point.y - robot_point.y;
+
+  if(std::sqrt(pow(dx,2) + pow(dy,2)) < goal_tolerance_){
+    auto stop_vel = geometry_msgs::msg::Twist();
+    stop_vel.linear.x = 0.0;
+    stop_vel.linear.y = 0.0;
+    stop_vel.linear.z = 0.0;
+    stop_vel.angular.x = 0.0;
+    stop_vel.angular.y = 0.0;
+    stop_vel.angular.z = 0.0;
+    cmd_vel_pub_->publish(stop_vel); 
+    current_path_ = NULL;
+  }
+  else{
+    // Find the lookahead point
+    auto lookahead_point = findLookaheadPoint();
+    if (!lookahead_point) {
+      return;  // No valid lookahead point found
     }
 
-  // Find the lookahead point
-  auto lookahead_point = findLookaheadPoint();
-  if (!lookahead_point) {
-    return;  // No valid lookahead point found
+    // Compute velocity command
+    auto cmd_vel = computeVelocity(*lookahead_point);
+    // Publish the velocity command
+    cmd_vel_pub_->publish(cmd_vel);
   }
-
-  // Compute velocity command
-  auto cmd_vel = computeVelocity(*lookahead_point);
-  // Publish the velocity command
-  cmd_vel_pub_->publish(cmd_vel);
 }
 
 int sgn(double x){
@@ -86,7 +104,6 @@ std::optional<geometry_msgs::msg::PoseStamped> ControlNode::findLookaheadPoint()
         lookahead_point.pose.position.x = ix1 + robot_point.x;
         lookahead_point.pose.position.y = iy1 + robot_point.y;
         path_index_ = i;
-        RCLCPP_INFO(this->get_logger(), "FOUND");
         break;
       }
 
@@ -99,7 +116,6 @@ std::optional<geometry_msgs::msg::PoseStamped> ControlNode::findLookaheadPoint()
         lookahead_point.pose.position.x = ix2 + robot_point.x;
         lookahead_point.pose.position.y = iy2 + robot_point.y;
         path_index_ = i;
-        RCLCPP_INFO(this->get_logger(), "FOUND");
         break;
       }
     }
@@ -118,15 +134,10 @@ geometry_msgs::msg::Twist ControlNode::computeVelocity(const geometry_msgs::msg:
   geometry_msgs::msg::Point robot_point =  robot_odom_->pose.pose.position;
   geometry_msgs::msg::Quaternion robot_orientation =  robot_odom_->pose.pose.orientation;
   double target_heading = atan2(target_point.y - robot_point.y, target_point.x - robot_point.x);
-  RCLCPP_INFO(this->get_logger(), "Target Point: x %f, y %f", target_point.x, target_point.y);
-  RCLCPP_INFO(this->get_logger(), "Current Point: x %f, y %f", robot_point.x, robot_point.y);
-  RCLCPP_INFO(this->get_logger(), "Target Heading: %f", target_heading*180.0/M_PI);
   double current_heading = extractYaw(robot_orientation);
-  RCLCPP_INFO(this->get_logger(), "Current Heading: %f", current_heading*180.0/M_PI);
   double steering_angle = target_heading - current_heading;
   steering_angle = std::atan2(std::sin(steering_angle), std::cos(steering_angle));
-  RCLCPP_INFO(this->get_logger(), "Steering Heading: %f", steering_angle*180.0/M_PI);
-  double angular_vel = steering_angle;
+  double angular_vel = 2*steering_angle;
   angular_vel = std::clamp(angular_vel, -1.0, 1.0);
   cmd_vel.linear.x = linear_speed_;
   cmd_vel.angular.z = angular_vel;
